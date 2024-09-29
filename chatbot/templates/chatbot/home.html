@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ChatBot</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #1a1a1a;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+        .search-container {
+            width: 100%;
+            max-width: 600px;
+        }
+        .search-form {
+            display: flex;
+            border: 2px solid #3a3a3a;
+            border-radius: 25px;
+            overflow: hidden;
+            background-color: #2a2a2a;
+        }
+        .search-input {
+            flex-grow: 1;
+            padding: 10px 20px;
+            border: none;
+            background-color: transparent;
+            color: #d1d1d1;
+            font-size: 16px;
+        }
+        .search-input::placeholder {
+            color: #6a6a6a;
+        }
+        .search-input:focus {
+            outline: none;
+        }
+        .search-button {
+            background-color: transparent;
+            border: none;
+            color: #6a6a6a;
+            padding: 10px 15px;
+            cursor: pointer;
+            transition: color 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .search-button:hover {
+            color: #e0e0e0;
+        }
+        .search-button svg {
+            width: 20px;
+            height: 20px;
+
+
+        }
+        
+
+        
+        .response-container {
+        margin-top: 20px;
+        padding: 15px;
+        background-color: #2a2a2a;
+        border-radius: 10px;
+        color: #d1d1d1;
+        width: 100%;
+        max-width: 600px;
+        min-height: 150px;
+        max-height: 400px;
+        overflow-y: auto;
+        word-wrap: break-word;
+        line-height: 1.5;
+        }
+
+        .response-container p {
+            margin-bottom: 10px;
+        }
+
+        .response-container strong {
+            color: #4a90e2;
+            font-size: 1.1em;
+        }
+
+        .response-container ul {
+            margin-left: 20px;
+            margin-bottom: 10px;
+        }
+
+        .response-container li {
+            margin-bottom: 5px;
+        }
+
+        .response-container .error {
+            color: #ff6b6b;
+        }
+        
+        #response {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #2a2a2a;
+            border-radius: 10px;
+            color: #d1d1d1;
+            width: 100%;
+            max-width: 600px;
+            min-height: 150px;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            line-height: 1.5;
+
+
+
+
+
+        
+        }
+    </style>
+</head>
+<body>
+    <div class="search-container">
+        <form id="chatgpt-form" class="search-form" action="/groq-query/">
+            <input type="text" id="search-input" class="search-input" placeholder="Ask Anything..." aria-label="Search">
+            <button type="submit" class="search-button" aria-label="Submit search">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="12" y1="19" x2="12" y2="5"></line>
+                    <polyline points="5 12 12 5 19 12"></polyline>
+                </svg>
+            </button>
+        </form>
+    </div>
+
+    <div id="response" ></div>
+
+
+    <script>
+        document.getElementById('chatgpt-form').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const query = document.getElementById('search-input').value;
+            const responseDiv = document.getElementById('response');
+            responseDiv.innerHTML = '<p>Loading...</p>';
+        
+            fetch('/groq-query/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'X-CSRFToken': getCookie('csrftoken')
+                },
+                body: 'query=' + encodeURIComponent(query)
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.answer) {
+                    // Convert Markdown-style formatting to HTML
+                    const formattedAnswer = data.answer
+                        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')  // Bold text
+                        .replace(/^\s*[-*]\s+/gm, '<li>')  // Bullet points
+                        .replace(/^(.+)$/gm, '<p>$1</p>')  // Paragraphs
+                        .replace(/<p><li>/g, '<li>')  // Fix nested list items
+                        .replace(/<\/li><\/p>/g, '</li>');
+        
+                    responseDiv.innerHTML = formattedAnswer;
+        
+                    // Wrap lists in <ul> tags
+                    const tempDiv = document.createElement('div');
+                    tempDiv.innerHTML = responseDiv.innerHTML;
+                    const lists = tempDiv.querySelectorAll('li');
+                    lists.forEach(item => {
+                        if (item.parentNode.nodeName !== 'UL') {
+                            const ul = document.createElement('ul');
+                            item.parentNode.insertBefore(ul, item);
+                            while (item && item.nodeName === 'LI') {
+                                const nextSibling = item.nextSibling;
+                                ul.appendChild(item);
+                                item = nextSibling;
+                            }
+                        }
+                    });
+                    responseDiv.innerHTML = tempDiv.innerHTML;
+                } else {
+                    responseDiv.innerHTML = '<p class="error">Error: ' + data.error + '</p>';
+                }
+            })
+            .catch(error => {
+                responseDiv.innerHTML = '<p class="error">Error: ' + error.message + '</p>';
+            });
+        });
+        
+        // Function to get CSRF token (unchanged)
+        function getCookie(name) {
+            // ... (keep the existing getCookie function)
+        }
+        </script>
+
+   
+</body>
+
+<footer style="padding: 20px;  color: #535353; text-align: center; font-family: Arial, sans-serif;">
+    
+    &copy; Chirag Bisht. All rights reserved. 
+    <a href="https://github.com/Chiragbisht" target="_blank" style="margin-left: 10px; color: #fff9f9;">
+    <i class="fab fa-github"></i>
+    </a>
+
+</footer>
+</html>
